@@ -7,6 +7,7 @@ import queue
 import json
 import os
 import copy
+import argparse
 
 CACHE_DIR = "cache/sokoban"
 
@@ -25,8 +26,13 @@ docker_original = pygame.image.load('games/sokoban/images/dock.png')
 
 _last_saved_matrix = None
 
-# Start game from level 1 and auto advance after completion
-level = 1
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="Sokoban Game")
+parser.add_argument("--level", type=int, default=1, help="Start game from a specific level")
+args = parser.parse_args()
+
+# Start game from specified level or default to level 1
+level = args.level
 level_dict = {"level": level}
 current_level_path = os.path.join(CACHE_DIR, "current_level.json")
 print(f"writing to: {current_level_path}")
