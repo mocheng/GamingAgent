@@ -42,7 +42,7 @@ def matrix_to_text_table(matrix):
     for row_idx, row in enumerate(matrix):
         for col_idx, cell in enumerate(row):
             item_type = item_map.get(cell, 'Unknown')
-            table_rows.append(f"{item_id:<3} | {item_type:<12} | ({col_idx}, {row_idx})")
+            table_rows.append(f"{item_id:<3} | {item_type:<12} | ({row_idx}, {col_idx})")
             item_id += 1
     
     return "\n".join(table_rows)
@@ -155,21 +155,32 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "Example output: move: right, thought: Positioning the player to access other boxes and docks for future moves."
     )
     '''
+
     prompt = (
     "## Sokoban Game Rules\n"
-    "- The Sokoban board is structured as a list matrix with coordinated positions: (column_index, row_index).\n"
-    "- The matrix contains walls, boxes, docks, and the worker. Walls are marked as '#'. Boxes are marked as '$'. Docks are marked as '?'. The worker are marked as '@'. Empty space are empty string.\n"
-    "- You control a worker who can move in four directions (up along row index, down along row index, left along column index, right along column index) in a 2D Sokoban game. "
+    "- The Sokoban board is structured as a list matrix with coordinated positions: (row_index, column_index).\n"
+    "- The matrix contains walls, boxes, docks, and the worker."
+    "- In the matrix, the following symbols are used to represent different elements:"
+    "'#': 'Wall',"
+    "'@': 'Worker',"
+    "'$': 'Box',"
+    "'?': 'Dock',"
+    "'*': 'Box on Dock',"
+    "' ': 'Empty'"
+    #  Walls are marked as '#'. Boxes that are not in any doc are marked as '$'. Docks without box are marked as '?'. Boxes on dock are marked '*'. The worker are marked as '@'. Empty space are empty string.\n"
+    "- You control a worker who can move in four directions (up decrements row_index, down increments row_index, left decrements column_index, right decrements column_index) in a 2D Sokoban game board. "
     "- You can push boxes if the worker is positioned next to the box and the opposite side of the box is empty. "
     "- You can not push the box into a wall or another box. "
     "- The worker can only push one box at a time. "
     "- The worker can not pull boxes."
     "- The worker can not move through walls or boxes. "    
+    "- When a box reaches a dock location, it is marked as a box on dock.\n"
     "- The goals is to push all boxes onto the dock locations.\n"
+    "- When all boxes reaches dock location, the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts.\n"
 
     "## Methodology of playing Sokoban\n"
     "- Make a plan of moving boxes to the dock locations.\n"
-    "- The plan should contain the next 1 to 5 steps by considering all possible paths for each box, ensuring they will have a viable step-by-step path to reach their dock locations.\n"    
+    "- The plan should contain the next 1 to 20 steps by considering all possible paths for each box, ensuring they will have a viable step-by-step path to reach their dock locations.\n"    
     "- Before leaving a box. Consider if it will become a road block for future boxes.\n"
     "- Consider relationship among boxes, you can run the Rolling Stone algorithm: Iterative Deepening A* (IDA*) algorithm to find an optimal path.\n"
 
@@ -180,9 +191,26 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     f"{table}\n\n"
 
     "## Output Format:\n"
-    "move: up/down/left/right, thought: <plan of steps>\n\n"
-    "Example output: move: right, thought: Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3), (2, 4), (3, 4).\n\n"
 
+    "The output should be one or multiple lines of text, each line should contain a move and a thought process.\n"
+    "The output should be in the following format:\n"
+    "move: <action>, thought: <plan of steps>\n\n"
+
+    "The action should be one of the following: up, down, left, right."
+    "The action 'up' decrements the row_index of the worker in board.\n"
+    "The action 'down' increments the row_index of the worker in board\n"
+    "The action 'left' decrements the column_index of the worker in board\n"
+    "The action 'right' increments the column_index of the worker in board\n"
+    "All action cannot cross wall.\n"
+    "All action can push boxes if the worker is positioned next to the box and the opposite side of the box is empty.\n"
+
+    "The thought process should be a thoughtful plan of steps.\n"    
+
+    "Example output 1 (single move):"
+    "move: right, thought: Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).\n\n"
+    "Example output 2 (multiple moves):"
+    "move: right, thought: Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).\n\n"
+    "move: up, thought: Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 4) -> (3, 4).\n\n"
     )
 
 
