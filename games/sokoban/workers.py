@@ -192,9 +192,11 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     "## Output Format:\n"
 
-    "The output should be one or multiple lines of text, each line should contain a move and a thought process.\n"
+    "The output should be one or multiple lines of text, each line should contain a thought process and a move.\n"
     "The output should be in the following format:\n"
-    "move: <action>, thought: <plan of steps>\n\n"
+    "<thought>{thought process}</thought><move>{action}</move>\n\n"
+
+    "The thought process should be a thoughtful plan of steps.\n"    
 
     "The action should be one of the following: up, down, left, right."
     "The action 'up' decrements the row_index of the worker in board.\n"
@@ -204,13 +206,11 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "All action cannot cross wall.\n"
     "All action can push boxes if the worker is positioned next to the box and the opposite side of the box is empty.\n"
 
-    "The thought process should be a thoughtful plan of steps.\n"    
-
     "Example output 1 (single move):"
-    "move: right, thought: Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).\n\n"
+    "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move:>\n\n"
     "Example output 2 (multiple moves):"
-    "move: right, thought: Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).\n\n"
-    "move: up, thought: Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 4) -> (3, 4).\n\n"
+    "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move>"
+    "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 4) -> (3, 4)</thought><move>up</move>\n\n"
     )
 
 
@@ -240,12 +240,12 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     latency = time.time() - start_time
 
-    pattern = r'move:\s*(\w+),\s*thought:\s*(.*)'
+    pattern = r'<thought>([^<]*)</thought><move>(\w+)</move>'
     matches = re.findall(pattern, response, re.IGNORECASE)
 
     move_thought_list = []
     # Loop through every move in the order they appear
-    for move, thought in matches:
+    for thought, move in matches:
         move = move.strip().lower()
         thought = thought.strip()
 
