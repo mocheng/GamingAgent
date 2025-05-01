@@ -176,7 +176,11 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "- The worker can not move through walls or boxes. "    
     "- When a box reaches a dock location, it is marked as a box on dock.\n"
     "- The goals is to push all boxes onto the dock locations.\n"
-    "- When all boxes reaches dock location, the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts.\n"
+    f"- When all boxes reaches dock location, the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts with action 'cleanup'. You are currently in level {level}.\n"
+
+    "## Tricks and Tips\n"
+    "- You can use the 'unmove' action to undo the last move if you make a mistake.\n"
+    "- You can use the 'restart' action to restart the current level if you get stuck.\n"
 
     "## Methodology of playing Sokoban\n"
     "- Make a plan of moving boxes to the dock locations.\n"
@@ -198,13 +202,16 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     "The thought process should be a thoughtful plan of steps.\n"    
 
-    "The action should be one of the following: up, down, left, right."
-    "The action 'up' decrements the row_index of the worker in board.\n"
-    "The action 'down' increments the row_index of the worker in board\n"
-    "The action 'left' decrements the column_index of the worker in board\n"
-    "The action 'right' increments the column_index of the worker in board\n"
+    "The action should be one of the following"
+    "- 'up' decrements the row_index of the worker in board.\n"
+    "- 'down' increments the row_index of the worker in board\n"
+    "- 'left' decrements the column_index of the worker in board\n"
+    "- 'right' increments the column_index of the worker in board\n"
+    "- 'restart' means to restart current level.\n"
+    "- 'unmove' means to undo the last move.\n"
+    "- 'cleanup' means that the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts. You should only do 'cleanup' if the curret layout of the Sokoban board shows that all boxes are on docks.\n"
     "All action cannot cross wall.\n"
-    "All action can push boxes if the worker is positioned next to the box and the opposite side of the box is empty.\n"
+    "Actions up/down/left/right can only push boxes if the worker is positioned next to the box and the opposite side of the box is empty.\n"
 
     "Example output 1 (single move):"
     "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move:>\n\n"
