@@ -164,10 +164,10 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "'#': 'Wall',"
     "'@': 'Worker',"
     "'$': 'Box',"
+    "'+': 'Worker on Dock',"
     "'?': 'Dock',"
     "'*': 'Box on Dock',"
     "' ': 'Empty'"
-    #  Walls are marked as '#'. Boxes that are not in any doc are marked as '$'. Docks without box are marked as '?'. Boxes on dock are marked '*'. The worker are marked as '@'. Empty space are empty string.\n"
     "- You control a worker who can move in four directions (up decrements row_index, down increments row_index, left decrements column_index, right decrements column_index) in a 2D Sokoban game board. "
     "- You can push boxes if the worker is positioned next to the box and the opposite side of the box is empty. "
     "- You can not push the box into a wall or another box. "
@@ -196,7 +196,7 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     "## Output Format:\n"
 
-    "The output should be one or multiple lines of text, each line should contain a thought process and a move.\n"
+    "The output should be on line of text, each line should contain a thought process and a move.\n"
     "The output should be in the following format:\n"
     "<thought>{thought process}</thought><move>{action}</move>\n\n"
 
@@ -215,9 +215,9 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     "Example output 1 (single move):"
     "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move:>\n\n"
-    "Example output 2 (multiple moves):"
-    "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move>"
-    "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 4) -> (3, 4)</thought><move>up</move>\n\n"
+    # "Example output 2 (multiple moves):"
+    # "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move>"
+    # "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 4) -> (3, 4)</thought><move>up</move>\n\n"
     )
 
 
