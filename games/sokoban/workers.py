@@ -10,7 +10,7 @@ import json
 
 CACHE_DIR = "cache/sokoban"
 
-def load_matrix(filename='game_state.json'):
+def load_game_state(filename='game_state.json'):
     filename = os.path.join(CACHE_DIR, filename)
     """Load the game matrix from a JSON file."""
     if not os.path.exists(filename):
@@ -22,11 +22,11 @@ def load_matrix(filename='game_state.json'):
         print(f"Error loading matrix: {e}")
         return None
 
-def matrix_to_text_table(matrix):
-    """Convert a 2D list matrix into a structured text table."""
+def convert_to_text_table_and_matrix(game_state):
+    """Convert a 2D list matrix into a structured text table and transform the matrix based on item_map."""
     header = "ID  | Item Type    | Position"
     line_separator = "-" * len(header)
-    
+
     item_map = {
         '#': 'Wall',
         '@': 'Worker',
@@ -35,18 +35,21 @@ def matrix_to_text_table(matrix):
         '*': 'Box on Dock',
         ' ': 'Empty'
     }
-    
+
     table_rows = [header, line_separator]
+    matrix = []
     item_id = 1
-    
-    for row_idx, row in enumerate(matrix):
+
+    for row_idx, row in enumerate(game_state):
+        transformed_row = []
         for col_idx, cell in enumerate(row):
             item_type = item_map.get(cell, 'Unknown')
             table_rows.append(f"{item_id:<3} | {item_type:<12} | ({row_idx}, {col_idx})")
+            transformed_row.append(item_type)
             item_id += 1
-    
-    return "\n".join(table_rows)
+        matrix.append(transformed_row)
 
+    return "\n".join(table_rows), matrix
 
 def matrix_to_string(matrix):
     """Convert a 2D list matrix into a string with each row on a new line."""
@@ -72,12 +75,12 @@ def sokoban_read_worker(system_prompt, api_provider, model_name, image_path):
     # what's the point of base64_image here?
     base64_image = encode_image(image_path)
 
-    matrix = load_matrix()
-    if matrix is not None:
-        board_str = matrix_to_text_table(matrix)
+    game_state = load_game_state()
+    if game_state is not None:
+        board_str, matrix = convert_to_text_table_and_matrix(game_state)
     else:
         board_str = "No board available."
-    return board_str
+    return board_str, matrix
 
 def sokoban_worker(system_prompt, api_provider, model_name, 
     prev_response="", 
@@ -115,46 +118,11 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     annotate_image_path, grid_annotation_path, annotate_cropped_image_path = get_annotate_img(screenshot_path, crop_left=crop_left, crop_right=crop_right, crop_top=crop_top, crop_bottom=crop_bottom, grid_rows=grid_rows, grid_cols=grid_cols, cache_dir=CACHE_DIR)
 
-    table = sokoban_read_worker(system_prompt, api_provider, model_name, screenshot_path)
+    table, matrix = sokoban_read_worker(system_prompt, api_provider, model_name, screenshot_path)
 
-    #print(f"-------------- TABLE --------------\n{table}\n")
+    # print(f"-------------- TABLE --------------\n{table}\n")
+    # print(f"-------------- MATRIX --------------\n{matrix}\n")
     #print(f"-------------- prev response --------------\n{prev_response}\n")
-
-    '''
-    prompt = (
-    "## Previous Lessons Learned\n"
-    "- The Sokoban board is structured as a list matrix with coordinated positions: (column_index, row_index).\n"
-    "- You control a worker who can move in four directions (up along row index, down along row index, left along column index, right along column index) in a 2D Sokoban game. "
-    "You can push boxes if positioned correctly but cannot pull them. "
-    "Be mindful of walls and corners, as getting a box irreversibly stuck may require a restart.\n"
-    "- You are an expert AI agent specialized in solving Sokoban puzzles optimally." 
-    "Consider relationship among boxes, you can run the Rolling Stone algorithm: Iterative Deepening A* (IDA*) algorithm to find an optimal path.\n"
-    "- Before leaving a box. Consider if it will be become a road block for future boxes.\n"
-    "- Before making a move, re-analyze the entire puzzle layout. "
-    "Plan the next 1 to 5 steps by considering all possible paths for each box, "
-    "ensuring they will have a viable step-by-step path to reach their dock locations.\n"
-    "- After a box reaches a dock location. Reconsider if the dock location is optimal, or it should be repositioned to another dock location.\n"
-    "- Identify potential deadlocks early and prioritize moves that maintain overall solvability. "
-    "However, note that temporarily blocking a box may sometimes be necessary to progress, "
-    "so focus on the broader strategy rather than ensuring all boxes are always movable at every step.\n"
-
-    "## Potential Errors to avoid:\n"
-    "1. Vertical Stacking Error: stacked boxes can't not be moved from the stacked direction and can become road block.\n"
-    "2. Phantom Deadlock Error: boxes pushed to the walls will very likely get pushed to corners and result in deadlocks.\n"
-    "3. Box Accessibility Error: Consider the spacial relationship between the worker and the current box. Push it in a way that the worker can access it later to move it to a dock location.\n"
-    "3. Corner Lock Error: boxes get pushed to corners will not be able to get out.\n"
-    "4. Path Obstruction Error: a box blocks your way to reach other boxes and make progress to the game.\n"
-    "5. Final Dock Saturation Error: choose which box goes to which dock wisely.\n"
-
-    f"Here is your previous response: {prev_response}. Please evaluate your plan and thought about whether we should correct or adjust.\n"
-    "Here is the current layout of the Sokoban board:\n"
-    f"{table}\n\n"
-
-    "### Output Format:\n"
-    "move: up/down/left/right, thought: <brief reasoning>\n\n"
-    "Example output: move: right, thought: Positioning the player to access other boxes and docks for future moves."
-    )
-    '''
 
     prompt = (
     "## Sokoban Game Rules\n"
@@ -181,18 +149,29 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "## Tricks and Tips\n"
     "- You can use the 'unmove' action to undo the last move if you make a mistake.\n"
     "- You can use the 'restart' action to restart the current level if you get stuck.\n"
+    "- You might need to move around some boxes or walls to create space for the worker to move.\n"
 
     "## Methodology of playing Sokoban\n"
     "- Make a plan of moving boxes to the dock locations.\n"
-    "- The plan should contain the next 1 to 20 steps by considering all possible paths for each box, ensuring they will have a viable step-by-step path to reach their dock locations.\n"    
+    "- The plan should contain the next multiple steps by considering all possible paths for each box, ensuring they will have a viable step-by-step path to reach their dock locations.\n"    
     "- Before leaving a box. Consider if it will become a road block for future boxes.\n"
     "- Consider relationship among boxes, you can run the Rolling Stone algorithm: Iterative Deepening A* (IDA*) algorithm to find an optimal path.\n"
+    "- Sometimes, you may need to push box to opposite direction to make space for the box to be pushed to the dock location.\n"
+    "- Start with the end. Think how the last box will reach the dock location. Then work backward to find the path for the worker.\n"
+    "- Before making a move, re-analyze the entire puzzle layout. "
+    "- Do not waste too much time thinking. If you are not sure, just make a move. You can always unmove or restart to compose a new plan.\n"
+
+    "## Potential Deadlocks to avoid:\n"
+    "1. If a box is pushed to a wall, it cannot move away from the wall, unless the box can be pushed along the wall to be away from the wall.\n"
+    "2. If a box is pushed to a corner, it cannot move away from the corner.\n"
 
     f"Here is your previous response: {prev_response}. Please evaluate your plan and thought about whether we should correct or adjust.\n"
 
     "## Sokoban Game board"
-    "Here is the current layout of the Sokoban board:\n"
-    f"{table}\n\n"
+    # "Here is the current layout of the Sokoban board:\n"
+    # f"{table}\n\n"
+    "Here is the current layout in 2-dimension array:\n"
+    f"{matrix}\n\n"
 
     "## Output Format:\n"
 
