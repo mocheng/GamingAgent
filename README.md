@@ -1,4 +1,7 @@
 <div align="center"> <h1>GamingAgent - Personal Computer Gaming Agent</h1> </div> 
+
+This repo has been forked from [lmgame-org/GamingAgent](https://github.com/lmgame-org/GamingAgent). I'd like to make huge architecture change that might not be merged back to upstream fork. So, this repo has been de-forked to be stand-alone.
+
 <p align="center"> <a href="https://x.com/largemodelgame"><b>📺 Demos on X</b></a> | <a href="https://huggingface.co/spaces/lmgame/game_arena_bench"><b>🏆 Leaderboard</b></a> | <a href="https://lmgame.org/#/blog/gaming_agent_intro"><b>📝 Blog</b></a> | <a href="https://lmgame.org/#/gaming_agent"><b>🌐 Web</b></a></p>
 
 ## Contents
