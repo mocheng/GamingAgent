@@ -48,24 +48,16 @@ system_prompt = (
     "Your goal is to push all boxes onto the designated dock locations while avoiding deadlocks. "
 )
 
+def pyautogui_move_handler(move):
+    pyautogui.press(move)
 
-def main():
-    parser = argparse.ArgumentParser(description="sokoban AI Agent")
-    parser.add_argument("--api_provider", type=str, default="openai", help="API provider to use.")
-    parser.add_argument("--model_name", type=str, default="o3-mini", help="LLM model name.")
-    parser.add_argument("--modality", type=str, default="text-only", choices=["text-only", "vision-text"],
-                        help="modality used.")
-    parser.add_argument("--thinking", type=str, default=True, help="Whether to use deep thinking.")
-    parser.add_argument("--starting_level", type=int, default=1, help="Starting level for the Sokoban game.")
-    parser.add_argument("--num_threads", type=int, default=5, help="Number of parallel threads to launch.")
-    args = parser.parse_args()
-
+def main_loop(api_provider, model_name, modality, thinking, num_threads, move_handler=pyautogui_move_handler):
     # TODO: enlarge this cache size and clear it when level up
     prev_responses = deque(maxlen=20)
     level = None
     step_count = 0
 
-    def perform_move(move):
+    def perform_move(action):
         key_map = {
             "up": "up",
             "down": "down",
@@ -76,7 +68,7 @@ def main():
             "levelup": ' ', # do nothing
         }
         if move in key_map:
-            pyautogui.press(key_map[move])
+            move_handler(key_map[move])
             print(f"Performed move: {move}")
         else:
             print(f"[WARNING] Invalid move: {move}")
@@ -87,30 +79,30 @@ def main():
             with open(current_level_path, 'r') as f:
                 level_dict = json.load(f)
                 level = level_dict["level"]
-            
+
             start_time = time.time()
 
             # Self-consistency launch, to disable, set "--num_threads 1"
-            with concurrent.futures.ThreadPoolExecutor(max_workers=args.num_threads) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
                 futures = []
-                for _ in range(args.num_threads):
+                for _ in range(num_threads):
                     futures.append(
                         executor.submit(
                             sokoban_worker,
                             system_prompt,
-                            args.api_provider,
-                            args.model_name,
+                            api_provider,
+                            model_name,
                             "\n".join(prev_responses),
-                            thinking=str2bool(args.thinking),
-                            modality=args.modality,
+                            thinking=str2bool(thinking),
+                            modality=modality,
                             level=level
                         )
                     )
-                
+
                 # Wait until all threads finish
                 concurrent.futures.wait(futures)
                 results = [f.result() for f in futures]
-            
+
             print("all threads finished execution...")
             print(results)
 
@@ -125,7 +117,7 @@ def main():
             for i in range(shortest_length):
                 # Collect the i-th move and thought from each thread (with sufficient actions predicted)
                 move_thought_pairs = [sol[i] for sol in results if len(sol) > i]
-                
+
                 # Vote
                 move_candidates = [pair["move"] for pair in move_thought_pairs]
                 move_candidate_count = {}
@@ -134,7 +126,7 @@ def main():
                         move_candidate_count[move_candidate] += 1
                     else:
                         move_candidate_count[move_candidate] = 1
-                
+
                 print(move_candidate_count)
 
                 if final_moves:
@@ -175,6 +167,25 @@ def main():
             print(f"[INFO] Move executed in {elapsed_time:.2f} seconds.")
     except KeyboardInterrupt:
         print("\nStopped by user.")
+
+def main(move_handler=pyautogui_move_handler):
+    parser = argparse.ArgumentParser(description="sokoban AI Agent")
+    parser.add_argument("--api_provider", type=str, default="openai", help="API provider to use.")
+    parser.add_argument("--model_name", type=str, default="o3-mini", help="LLM model name.")
+    parser.add_argument("--modality", type=str, default="text-only", choices=["text-only", "vision-text"],
+                        help="modality used.")
+    parser.add_argument("--thinking", type=str, default=True, help="Whether to use deep thinking.")
+    parser.add_argument("--num_threads", type=int, default=5, help="Number of parallel threads to launch.")
+    args = parser.parse_args()
+
+    main_loop(
+        api_provider=args.api_provider,
+        model_name=args.model_name,
+        modality=args.modality,
+        thinking=args.thinking,
+        num_threads=args.num_threads,
+        move_handler=move_handler
+    )
 
 if __name__ == "__main__":
     main()

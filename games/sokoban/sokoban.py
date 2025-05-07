@@ -26,27 +26,25 @@ docker_original = pygame.image.load('games/sokoban/images/dock.png')
 
 _last_saved_matrix = None
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description="Sokoban Game")
-parser.add_argument("--level", type=int, default=1, help="Start game from a specific level")
-# Add a new command line argument for specifying the max level
-parser.add_argument("--max_level", type=int, default=52, help="Maximum level in the level file")
-# Add a new command line argument for specifying the levels filename
-parser.add_argument("--levels_filename", type=str, default='games/sokoban/levels', help="Path to the levels file")
-args = parser.parse_args()
+def parse_arguments():
+    """
+    Parse command line arguments for the Sokoban game.
+    Returns:
+        argparse.Namespace: Parsed arguments.
+    """
+    parser = argparse.ArgumentParser(description="Sokoban Game")
+    parser.add_argument("--level", type=int, default=1, help="Start game from a specific level")
+    parser.add_argument("--max_level", type=int, default=52, help="Maximum level in the level file")
+    parser.add_argument("--levels_filename", type=str, default='games/sokoban/levels', help="Path to the levels file")
+    return parser.parse_args()
 
-# Start game from specified level or default to level 1
-level = args.level
-# Use the specified max level or default to 52
-max_level = args.max_level
-# Use the specified levels filename or default to 'games/sokoban/levels'
-levels_filename = args.levels_filename
-level_dict = {"level": level}
-current_level_path = os.path.join(CACHE_DIR, "current_level.json")
-print(f"writing to: {current_level_path}")
-print(level_dict)
-with open(current_level_path, 'w') as file:
-    json.dump(level_dict, file)
+# # Start game from specified level or default to level 1
+# level = args.level
+# # Use the specified max level or default to 52
+# max_level = args.max_level
+# # Use the specified levels filename or default to 'games/sokoban/levels'
+# levels_filename = args.levels_filename
+
 
 def save_levels_dimensions(levels_filename, max_level=52):
     """
@@ -355,81 +353,104 @@ def get_key():
         if event.type == pygame.KEYDOWN:
             return event.key
 
-# Load images and initialize pygame
-wall = pygame.image.load('games/sokoban/images/wall.png')
-floor = pygame.image.load('games/sokoban/images/floor.png')
-box = pygame.image.load('games/sokoban/images/box.png')
-box_docked = pygame.image.load('games/sokoban/images/box_docked.png')
-worker = pygame.image.load('games/sokoban/images/worker.png')
-worker_docked = pygame.image.load('games/sokoban/images/worker_dock.png')
-docker = pygame.image.load('games/sokoban/images/dock.png')
-background = (255, 226, 191)
-pygame.init()
+def initialize_game_assets():
+    """
+    Load images, initialize pygame, and set background color.
+    """
+    global wall, floor, box, box_docked, worker, worker_docked, docker, background
+    wall = pygame.image.load('games/sokoban/images/wall.png')
+    floor = pygame.image.load('games/sokoban/images/floor.png')
+    box = pygame.image.load('games/sokoban/images/box.png')
+    box_docked = pygame.image.load('games/sokoban/images/box_docked.png')
+    worker = pygame.image.load('games/sokoban/images/worker.png')
+    worker_docked = pygame.image.load('games/sokoban/images/worker_dock.png')
+    docker = pygame.image.load('games/sokoban/images/dock.png')
+    background = (255, 226, 191)
+    pygame.init()
 
-save_levels_dimensions(levels_filename, max_level)
+# Call the function to initialize assets
+initialize_game_assets()
 
-while True:
-    print("Starting Level " + str(level))
-    box_game = game(levels_filename, level)
-    size = box_game.load_size()
-    screen = pygame.display.set_mode(size, pygame.RESIZABLE)
-    clock = pygame.time.Clock()
-    level_completed = False
 
-    while not level_completed:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                sys.exit(0)
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    box_game.move(0, -1, True)
-                elif event.key == pygame.K_DOWN:
-                    box_game.move(0, 1, True)
-                elif event.key == pygame.K_LEFT:
-                    box_game.move(-1, 0, True)
-                elif event.key == pygame.K_RIGHT:
-                    box_game.move(1, 0, True)
-                elif event.key == pygame.K_q:
-                    sys.exit(0)
-                elif event.key == pygame.K_d:
-                    box_game.unmove()
-                elif event.key == pygame.K_r:
-                    box_game = game(levels_filename, level)
-            elif event.type == pygame.VIDEORESIZE:
-                # Resize the window and update the display
-                screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
-
-                # Calculate scale factor based on the new window width
-                scale_factor = event.w / size[0]  # Scale based on width change
-
-                # Update the game elements' sizes
-                scale_images()
-
-        if box_game.is_completed():
-            print_game(box_game.get_matrix(), screen)  # Ensure the last move is captured
-            pygame.display.update()  # Force screen refresh
-            pygame.time.delay(500)  # Small delay to show final state before transition
-            
-            display_end(screen)  # Show "Level Completed" message
-            pygame.display.update()
-            pygame.time.delay(2000)  # Wait for 2 seconds before switching levels
-            
-            level_completed = True
-
-        print_game(box_game.get_matrix(), screen)
-        pygame.display.update()
-        clock.tick(10)  # Limit to 10 FPS
-
-    level += 1
-
-    # HACK: make atomic operation
-    level_dict["level"] += 1
+def game_loop(level, levels_filename, max_level=52):
+    level_dict = {"level": level}
     current_level_path = os.path.join(CACHE_DIR, "current_level.json")
-
+    print(f"writing to: {current_level_path}")
+    print(level_dict)
     with open(current_level_path, 'w') as file:
         json.dump(level_dict, file)
-    
-    # If the level number exceeds the maximum, end the game.
-    if level > max_level:
-        print("Congratulations! All levels completed.")
-        sys.exit(0)
+
+    save_levels_dimensions(levels_filename, max_level)
+
+    while True:
+        print("Starting Level " + str(level))
+        box_game = game(levels_filename, level)
+        size = box_game.load_size()
+        screen = pygame.display.set_mode(size, pygame.RESIZABLE)
+        clock = pygame.time.Clock()
+        level_completed = False
+
+        while not level_completed:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    sys.exit(0)
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_UP:
+                        box_game.move(0, -1, True)
+                    elif event.key == pygame.K_DOWN:
+                        box_game.move(0, 1, True)
+                    elif event.key == pygame.K_LEFT:
+                        box_game.move(-1, 0, True)
+                    elif event.key == pygame.K_RIGHT:
+                        box_game.move(1, 0, True)
+                    elif event.key == pygame.K_q:
+                        sys.exit(0)
+                    elif event.key == pygame.K_d:
+                        box_game.unmove()
+                    elif event.key == pygame.K_r:
+                        box_game = game(levels_filename, level)
+                elif event.type == pygame.VIDEORESIZE:
+                    # Resize the window and update the display
+                    screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+
+                    # Calculate scale factor based on the new window width
+                    scale_factor = event.w / size[0]  # Scale based on width change
+
+                    # Update the game elements' sizes
+                    scale_images()
+
+            if box_game.is_completed():
+                print_game(box_game.get_matrix(), screen)  # Ensure the last move is captured
+                pygame.display.update()  # Force screen refresh
+                pygame.time.delay(500)  # Small delay to show final state before transition
+                
+                display_end(screen)  # Show "Level Completed" message
+                pygame.display.update()
+                pygame.time.delay(2000)  # Wait for 2 seconds before switching levels
+                
+                level_completed = True
+
+            print_game(box_game.get_matrix(), screen)
+            pygame.display.update()
+            clock.tick(10)  # Limit to 10 FPS
+
+        level += 1
+
+        # HACK: make atomic operation
+        level_dict["level"] += 1
+        current_level_path = os.path.join(CACHE_DIR, "current_level.json")
+
+        with open(current_level_path, 'w') as file:
+            json.dump(level_dict, file)
+        
+        # If the level number exceeds the maximum, end the game.
+        if level > max_level:
+            print("Congratulations! All levels completed.")
+            sys.exit(0)
+
+if __name__ == "__main__":
+    # Parse command line arguments
+    args = parse_arguments()
+
+    # Start the game loop
+    game_loop(args.level, args.levels_filename, args.max_level)
