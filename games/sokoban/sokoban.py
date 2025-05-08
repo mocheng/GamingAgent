@@ -35,7 +35,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Sokoban Game")
     parser.add_argument("--level", type=int, default=1, help="Start game from a specific level")
     parser.add_argument("--max_level", type=int, default=52, help="Maximum level in the level file")
-    parser.add_argument("--levels_filename", type=str, default='games/sokoban/levels', help="Path to the levels file")
+    parser.add_argument("--levels_filename", type=str, default='games/sokoban/simple_levels', help="Path to the levels file")
     return parser.parse_args()
 
 # # Start game from specified level or default to level 1
