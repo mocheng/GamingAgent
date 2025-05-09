@@ -76,6 +76,27 @@ def log_move_and_thought(move, thought, latency):
     except Exception as e:
         print(f"[ERROR] Failed to write log entry: {e}")
 
+def call_llm(api_provider, system_prompt, model_name, prompt, thinking=True, base64_image=None, modality="vision-text"):
+    """
+    Calls the appropriate LLM API based on the provider, model, and modality.
+    """
+    if api_provider == "anthropic" and modality == "text-only":
+        return anthropic_text_completion(system_prompt, model_name, prompt, thinking)
+    elif api_provider == "anthropic":
+        return anthropic_completion(system_prompt, model_name, base64_image, prompt, thinking)
+    elif api_provider == "openai" and "o3" in model_name and modality == "text-only":
+        return openai_text_reasoning_completion(system_prompt, model_name, prompt)
+    elif api_provider == "openai":
+        return openai_completion(system_prompt, model_name, base64_image, prompt)
+    elif api_provider == "gemini" and modality == "text-only":
+        return gemini_text_completion(system_prompt, model_name, prompt)
+    elif api_provider == "gemini":
+        return gemini_completion(system_prompt, model_name, base64_image, prompt)
+    elif api_provider == "deepseek":
+        return deepseek_text_reasoning_completion(system_prompt, model_name, prompt)
+    else:
+        raise NotImplementedError(f"API provider: {api_provider} is not supported.")
+
 def sokoban_read_worker(system_prompt, api_provider, model_name, image_path):
     # what's the point of base64_image here?
     base64_image = encode_image(image_path)
@@ -92,6 +113,7 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     thinking=True, 
     modality="vision-text",
     level=1,
+    critic_feedback=None,
     crop_left=0, 
     crop_right=0, 
     crop_top=0, 
@@ -125,14 +147,14 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     table, matrix = sokoban_read_worker(system_prompt, api_provider, model_name, screenshot_path)
 
-    print(f"-------------- TABLE --------------\n{table}\n")
+    # print(f"-------------- TABLE --------------\n{table}\n")
     # print(f"-------------- MATRIX --------------\n{matrix_to_string2(matrix)}\n")
-    print(f"-------------- MATRIX --------------\n{matrix}\n")
+    # print(f"-------------- MATRIX --------------\n{matrix}\n")
     #print(f"-------------- prev response --------------\n{prev_response}\n")
 
     prompt = (
     "## Sokoban Game Rules\n"
-    "- The Sokoban board is structured as a list matrix with coordinated positions: (row_index, column_index).\n"
+    "- The Sokoban board is structured as a list matrix with coordinated positions: (row_index, column_index). Both row_index and column_index start with 0.\n"
     "- The matrix contains walls, boxes, docks, and the worker."
     "- In the matrix, the following symbols are used to represent different elements:"
     "'#': 'Wall',"
@@ -167,6 +189,10 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "- Before making a move, re-analyze the entire puzzle layout. "
     "- Do not waste too much time thinking. If you are not sure, just make a move. You can always unmove or restart to compose a new plan.\n"
 
+    "## Feedback and Critique\n"
+    "Another expert provides critique and feedback based on your thoughts and moves. It might be helpful to optimize your plan. Please take the feedback into consideratio. The feedback is:"
+    f"{critic_feedback}.\n\n"
+
     "## Potential Deadlocks to avoid:\n"
     "1. If a box is pushed to a wall, it cannot move away from the wall, unless the box can be pushed along the wall to be away from the wall.\n"
     "2. If a box is pushed to a corner, it cannot move away from the corner.\n"
@@ -185,7 +211,7 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "The output should be in the following format:\n"
     "<thought>{thought process}</thought><move>{action}</move>\n\n"
 
-    "The thought process should be a thoughtful plan of steps. Following methodology and tips mentioned before, try to compose a workable plan by list the path of moving. For example, (1,1)->(1,2)->(2,3) to move box 1 at (1,2). Keep refining your plan.\n"    
+    "The thought process should be a detailed and thoughtful plan of steps. Following methodology and tips mentioned before, taking critic's feedback into consideration, try to compose a workable plan by list the path of moving. For example, (1,1)->(1,2)->(2,3) to move box 1 at (1,2). Keep refining your plan.\n"    
 
     "The action should be one of the following"
     "- 'up' decrements the row_index of the worker in board.\n"
@@ -213,22 +239,7 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     print(f"Calling {model_name} API...")
     # Call the LLM API based on the selected provider.
-    if api_provider == "anthropic" and modality=="text-only":
-        response = anthropic_text_completion(system_prompt, model_name, prompt, thinking)
-    elif api_provider == "anthropic":
-        response = anthropic_completion(system_prompt, model_name, base64_image, prompt, thinking)
-    elif api_provider == "openai" and "o3" in model_name and modality=="text-only":
-        response = openai_text_reasoning_completion(system_prompt, model_name, prompt)
-    elif api_provider == "openai":
-        response = openai_completion(system_prompt, model_name, base64_image, prompt)
-    elif api_provider == "gemini" and modality=="text-only":
-        response = gemini_text_completion(system_prompt, model_name, prompt)
-    elif api_provider == "gemini":
-        response = gemini_completion(system_prompt, model_name, base64_image, prompt)
-    elif api_provider == "deepseek":
-        response = deepseek_text_reasoning_completion(system_prompt, model_name, prompt)
-    else:
-        raise NotImplementedError(f"API provider: {api_provider} is not supported.")
+    response = call_llm(api_provider, system_prompt, model_name, prompt, thinking, base64_image, modality)
 
     latency = time.time() - start_time
 
@@ -254,3 +265,106 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     # response
     return move_thought_list
+
+def sokoban_critic(moves_thoughts=None, last_action=None, system_prompt=None, api_provider=None, model_name=None, thinking=True, modality="text-only", level=1):
+    """
+    A critic agent to evaluate the moves and plans provided by sokoban_worker.
+    Uses an LLM to provide constructive suggestions based on the overall game state and Sokoban rules.
+    Args:
+        moves_thoughts: List of dicts, each with 'move' and 'thought' from sokoban_worker.
+        game_state: Optional. 2D list representing the current board. If None, loads from cache.
+        last_action: The last move issued by sokoban_worker (string).
+        system_prompt, api_provider, model_name, thinking, modality, level: LLM config, same as sokoban_worker.
+    Returns:
+        LLM-generated feedback string.
+    """
+    game_state = load_game_state()
+    if system_prompt is None:
+        system_prompt = (
+            "You are an expert Sokoban critic. Your job is to evaluate the quality, safety, and optimality of a sequence of moves and plans for Sokoban, following all Sokoban rules and best practices. "
+            "You must point out any mistakes, risks (such as deadlocks), inefficiencies, or missed opportunities for improvement. "
+            "Be constructive and specific. If the plan is good, explain why. If not, suggest concrete improvements."
+        )
+
+    # Prepare board state as text
+    if game_state is not None:
+        board_str = matrix_to_string(game_state)
+    else:
+        board_str = "No board available."
+
+    # Prepare moves/thoughts as text
+    last_action_str = f"The last action issued was: {last_action}." if last_action else ""
+
+    # Sophisticated prompt for LLM
+    prompt = (
+        "## Sobokan Game Rules\n"
+        "- The Sokoban board is structured as a list matrix with coordinated positions: (row_index, column_index). Both row_index and column_index start with 0.\n"
+            "- The matrix contains walls, boxes, docks, and the worker."
+            "- In the matrix, the following symbols are used to represent different elements:"
+            "'#': 'Wall',"
+            "'@': 'Worker',"
+            "'$': 'Box',"
+            "'+': 'Worker on Dock',"
+            "'?': 'Dock',"
+            "'*': 'Box on Dock',"
+            "' ': 'Empty'"
+            "- You control a worker who can move in four directions (up decrements row_index, down increments row_index, left decrements column_index, right decrements column_index) in a 2D Sokoban game board. "
+            "- You can push boxes if the worker is positioned next to the box and the opposite side of the box is empty. "
+            "- You can not push the box into a wall or another box. "
+            "- The worker can only push one box at a time. "
+            "- The worker can not pull boxes."
+            "- The worker can not move through walls or boxes. "    
+            "- When a box reaches a dock location, it is marked as a box on dock.\n"
+            "- The goals is to push all boxes onto the dock locations.\n"
+            f"- When all boxes reaches dock location, the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts with action 'cleanup'. You are currently in level {level}.\n"
+
+            "The worker's action should be one of the following"
+            "- 'up' decrements the row_index of the worker in board.\n"
+            "- 'down' increments the row_index of the worker in board\n"
+            "- 'left' decrements the column_index of the worker in board\n"
+            "- 'right' increments the column_index of the worker in board\n"
+            "- 'restart' means to restart current level.\n"
+            "- 'unmove' means to undo the last move.\n"
+            "- 'cleanup' means that the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts. You should only do 'cleanup' if the curret layout of the Sokoban board shows that all boxes are on docks.\n"
+            "All action cannot cross wall.\n"
+            "Actions up/down/left/right can only push boxes if the worker is positioned next to the box and the opposite side of the box is empty.\n"
+    
+        "## Sokoban Critic Instructions\n"
+        "You are given a Sokoban board state and a sequence of moves and thoughts by another player that lead to the current board state.\n"
+        "Your job is to critically evaluate the plan and moves, following these guidelines:\n"
+        "- Evaluate whether given thoughts and plans would end in deadlocks or repeated/looping actions.\n"
+        "- Identify if any move risks pushing a box into a corner or against a wall where it cannot be recovered.\n"
+        "- Assess if the plan is efficient and optimal, or if there are unnecessary steps.\n"
+        "- If the last action creates a deadlock, please suggest the other player to unmove.\n"
+        "- If the plan is good, explain why. If not, suggest specific improvements.\n"
+        "- Always be constructive and detailed.\n\n"
+
+        "## Sokoban Board State (as matrix)\n"
+        f"{last_action_str}\n\n"
+        f"The board state is: {board_str}\n\n"
+        "- The Sokoban board is structured as a list matrix with coordinated positions: (row_index, column_index).\n"
+        "- The matrix contains walls, boxes, docks, and the worker."
+        "- In the matrix, the following symbols are used to represent different elements:"
+            "'#': 'Wall',"
+            "'@': 'Worker',"
+            "'$': 'Box',"
+            "'+': 'Worker on Dock',"
+            "'?': 'Dock',"
+            "'*': 'Box on Dock',"
+            "' ': 'Empty'"
+
+        "## Moves and Thoughts\n"
+        f"The player's thoughts and moves: {moves_thoughts}\n\n"
+
+        "## Output Format\n"
+        "Write a detailed critique on the other player's thoughts and plans.\n"
+        "Suggest next move if the plan is feasible.\n"
+        "If the plan is not feasible, suggest new plans.\n"
+    )
+
+    # Call LLM for evaluation (like sokoban_worker)
+    if api_provider is None or model_name is None:
+        raise ValueError("api_provider and model_name must be provided for LLM-based critic.")
+    response = call_llm(api_provider, system_prompt, model_name, prompt, thinking, None, modality)
+
+    return response

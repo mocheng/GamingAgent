@@ -437,6 +437,7 @@ def game_loop(level, levels_filename, max_level=52):
             clock.tick(10)  # Limit to 10 FPS
 
         level += 1
+        pygame.display.set_caption(f'sokoban level {level}')
 
         # HACK: make atomic operation
         level_dict["level"] += 1

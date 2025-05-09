@@ -10,7 +10,7 @@ import re
 import pyautogui
 from tools.utils import str2bool
 
-from games.sokoban.workers import sokoban_worker
+from games.sokoban.workers import sokoban_worker, sokoban_critic
 
 CACHE_DIR = "cache/sokoban"
 
@@ -56,6 +56,7 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, move_ha
     prev_responses = deque(maxlen=20)
     level = None
     step_count = 0
+    critic_feedback = None
 
     def perform_move(action):
         key_map = {
@@ -82,6 +83,27 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, move_ha
 
             start_time = time.time()
 
+            # ------------------------- critic ------------------------ #
+            if (step_count > 0):
+                critic_feedback = sokoban_critic(
+                    moves_thoughts = "\n".join(prev_responses),
+                    last_action = final_moves[-1],
+                    system_prompt = None,
+                    api_provider = api_provider,
+                    model_name = model_name,
+                    thinking = str2bool(thinking),
+                    modality = modality,
+                    level = level,
+                )
+                print(f"[INFO] Critic feedback on {step_count}:")
+                print(
+                    "------------ critic feedback -------------\n",
+                    f"{critic_feedback}\n"
+                    "-----------------------------------------------\n"
+                )
+
+
+
             # Self-consistency launch, to disable, set "--num_threads 1"
             with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
                 futures = []
@@ -95,7 +117,8 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, move_ha
                             "\n".join(prev_responses),
                             thinking=str2bool(thinking),
                             modality=modality,
-                            level=level
+                            level=level,
+                            critic_feedback = critic_feedback
                         )
                     )
 
@@ -164,7 +187,8 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, move_ha
             
 
             print("[debug] previous message:")
-            print("\n".join(prev_responses))
+            # print("\n".join(prev_responses))
+            print(prev_responses[-1])
             elapsed_time = time.time() - start_time
             time.sleep(1)
             print(f"[INFO] Move executed in {elapsed_time:.2f} seconds.")
