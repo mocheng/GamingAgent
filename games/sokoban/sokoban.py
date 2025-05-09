@@ -382,6 +382,8 @@ def game_loop(level, levels_filename, max_level=52):
 
     save_levels_dimensions(levels_filename, max_level)
 
+    pygame.display.set_caption(f'sokoban level {level}')
+
     while True:
         print("Starting Level " + str(level))
         box_game = game(levels_filename, level)
