@@ -160,6 +160,9 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, move_ha
                     latest_response = f"step {step_count} executed:\n" + f"move: {move}, thought: {matched_thought}" + "\n"
                     prev_responses.append(latest_response)
 
+            #TODO: add a critic agent to evaluate the moves
+            
+
             print("[debug] previous message:")
             print("\n".join(prev_responses))
             elapsed_time = time.time() - start_time

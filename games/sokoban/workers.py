@@ -45,9 +45,10 @@ def convert_to_text_table_and_matrix(game_state):
         for col_idx, cell in enumerate(row):
             item_type = item_map.get(cell, 'Unknown')
             table_rows.append(f"{item_id:<3} | {item_type:<12} | ({row_idx}, {col_idx})")
-            transformed_row.append(item_type)
+            transformed_row.append(f'({row_idx}, {col_idx}) {item_type}')
+            # transformed_row.append(item_type)
             item_id += 1
-        matrix.append(transformed_row)
+        matrix.append('| '.join(transformed_row))
 
     return "\n".join(table_rows), matrix
 
@@ -55,6 +56,10 @@ def matrix_to_string(matrix):
     """Convert a 2D list matrix into a string with each row on a new line."""
     # If each element is already a string or you want a space between them:
     return "\n".join(" ".join(str(cell) for cell in row) for row in matrix)
+
+def matrix_to_string2(matrix):
+    """Convert a 2D list matrix into a string with each row on a new line."""
+    return "\n".join(("[" + (",".join(str(cell) for cell in row)) + "]") for row in matrix)
 
 
 def log_move_and_thought(move, thought, latency):
@@ -120,8 +125,9 @@ def sokoban_worker(system_prompt, api_provider, model_name,
 
     table, matrix = sokoban_read_worker(system_prompt, api_provider, model_name, screenshot_path)
 
-    # print(f"-------------- TABLE --------------\n{table}\n")
-    # print(f"-------------- MATRIX --------------\n{matrix}\n")
+    print(f"-------------- TABLE --------------\n{table}\n")
+    # print(f"-------------- MATRIX --------------\n{matrix_to_string2(matrix)}\n")
+    print(f"-------------- MATRIX --------------\n{matrix}\n")
     #print(f"-------------- prev response --------------\n{prev_response}\n")
 
     prompt = (
@@ -147,7 +153,7 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     f"- When all boxes reaches dock location, the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts with action 'cleanup'. You are currently in level {level}.\n"
 
     "## Tricks and Tips\n"
-    "- You can use the 'unmove' action to undo the last move if you make a mistake.\n"
+    "- You can use the 'unmove' action to undo the last move if you make a mistake such as pushing a box into a deadend.\n"
     "- You can use the 'restart' action to restart the current level if you get stuck.\n"
     "- You might need to move around some boxes or walls to create space for the worker to move.\n"
 
@@ -168,10 +174,10 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     f"Here is your previous response: {prev_response}. Please evaluate your plan and thought about whether we should correct or adjust.\n"
 
     "## Sokoban Game board"
-    # "Here is the current layout of the Sokoban board:\n"
-    # f"{table}\n\n"
-    "Here is the current layout in 2-dimension array:\n"
-    f"{matrix}\n\n"
+    "Here is the current layout of the Sokoban board:\n"
+    f"{table}\n\n"
+    # "Here is the current layout in 2-dimension array:\n"
+    # f"{matrix}\n\n"
 
     "## Output Format:\n"
 
@@ -179,7 +185,7 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "The output should be in the following format:\n"
     "<thought>{thought process}</thought><move>{action}</move>\n\n"
 
-    "The thought process should be a thoughtful plan of steps.\n"    
+    "The thought process should be a thoughtful plan of steps. Following methodology and tips mentioned before, try to compose a workable plan by list the path of moving. For example, (1,1)->(1,2)->(2,3) to move box 1 at (1,2). Keep refining your plan.\n"    
 
     "The action should be one of the following"
     "- 'up' decrements the row_index of the worker in board.\n"
