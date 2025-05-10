@@ -51,7 +51,7 @@ system_prompt = (
 def pyautogui_move_handler(move):
     pyautogui.press(move)
 
-def main_loop(api_provider, model_name, modality, thinking, num_threads, move_handler=pyautogui_move_handler):
+def main_loop(api_provider, model_name, modality, thinking, num_threads, no_critic= False, move_handler=pyautogui_move_handler):
     # TODO: enlarge this cache size and clear it when level up
     prev_responses = deque(maxlen=20)
     level = None
@@ -83,11 +83,12 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, move_ha
 
             start_time = time.time()
 
+            print(f"level={level}, step={step_count}\n")
             # ------------------------- critic ------------------------ #
-            if (step_count > 0):
+            if (step_count > 0 and no_critic == False):
                 critic_feedback = sokoban_critic(
                     moves_thoughts = "\n".join(prev_responses),
-                    last_action = final_moves[-1],
+                    last_action = final_moves[-1] if final_moves else "unknown action",
                     system_prompt = None,
                     api_provider = api_provider,
                     model_name = model_name,
@@ -95,14 +96,13 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, move_ha
                     modality = modality,
                     level = level,
                 )
-                print(f"[INFO] Critic feedback on {step_count}:")
+                print(f"[INFO] Critic feedback on step {step_count}:")
                 print(
                     "------------ critic feedback -------------\n",
                     f"{critic_feedback}\n"
                     "-----------------------------------------------\n"
                 )
-
-
+                # critic_feedback = "The strategy should be: 1. push the box down towards the bottom of the map. 2. After moving through the corridor to the bottom space, the worker can push the box up towards the top of the map."
 
             # Self-consistency launch, to disable, set "--num_threads 1"
             with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -188,7 +188,7 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, move_ha
 
             print("[debug] previous message:")
             # print("\n".join(prev_responses))
-            print(prev_responses[-1])
+            print(prev_responses[-1] if prev_responses else "No previous messages.")
             elapsed_time = time.time() - start_time
             time.sleep(1)
             print(f"[INFO] Move executed in {elapsed_time:.2f} seconds.")

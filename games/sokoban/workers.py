@@ -108,6 +108,31 @@ def sokoban_read_worker(system_prompt, api_provider, model_name, image_path):
         board_str = "No board available."
     return board_str, matrix
 
+SOKOBAN_GAME_RULES = '''
+## Sokoban Game Rules
+- The Sokoban board is structured as a matrix of items with coordinated positions: (row_index, column_index). Both row_index and column_index start with 0.
+- Each item in the board matrix can be Wall, Box, Dock, Empty, Worker, Worker on Dock, or Box on Dock. There is only one worker in the board.
+- In the matrix, the following symbols are used to represent different elements:
+    - '#': 'Wall'
+    - '@': 'Worker'
+    - '$': 'Box',
+    - '+': 'Worker on Dock'
+    - '?': 'Dock'
+    - '*': 'Box on Dock'
+    - ' ': 'Empty'
+- You control the worker who can move in four directions (up decrements row_index, down increments row_index, left decrements column_index, right decrements column_index) in the 2D Sokoban game board. The worker cannot move diagonally in one step.
+- Wall cannot be moved or crossed.
+- You can push boxes if the worker is positioned next to the box and the opposite side of the box is empty.
+- You can not push the box into a wall or another box.
+- The worker can only push one box at a time.
+- The worker can not pull boxes.
+- The worker can not move through walls or boxes.
+- When a box reaches a dock location, it is marked as a box on dock. A box on dock can also be pushed away from the dock.
+- When the worker reaches a dock location, it is marked as a Worker on Dock. The worker on dock can move away from the dock.
+- The goals is to push all boxes onto the dock locations.
+- When all boxes reaches dock location, the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts with action 'cleanup'. 
+'''
+
 def sokoban_worker(system_prompt, api_provider, model_name, 
     prev_response="", 
     thinking=True, 
@@ -153,31 +178,17 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     #print(f"-------------- prev response --------------\n{prev_response}\n")
 
     prompt = (
-    "## Sokoban Game Rules\n"
-    "- The Sokoban board is structured as a list matrix with coordinated positions: (row_index, column_index). Both row_index and column_index start with 0.\n"
-    "- The matrix contains walls, boxes, docks, and the worker."
-    "- In the matrix, the following symbols are used to represent different elements:"
-    "'#': 'Wall',"
-    "'@': 'Worker',"
-    "'$': 'Box',"
-    "'+': 'Worker on Dock',"
-    "'?': 'Dock',"
-    "'*': 'Box on Dock',"
-    "' ': 'Empty'"
-    "- You control a worker who can move in four directions (up decrements row_index, down increments row_index, left decrements column_index, right decrements column_index) in a 2D Sokoban game board. "
-    "- You can push boxes if the worker is positioned next to the box and the opposite side of the box is empty. "
-    "- You can not push the box into a wall or another box. "
-    "- The worker can only push one box at a time. "
-    "- The worker can not pull boxes."
-    "- The worker can not move through walls or boxes. "    
-    "- When a box reaches a dock location, it is marked as a box on dock.\n"
-    "- The goals is to push all boxes onto the dock locations.\n"
-    f"- When all boxes reaches dock location, the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts with action 'cleanup'. You are currently in level {level}.\n"
+    f"{SOKOBAN_GAME_RULES}"
+
+    f"You are currently in level {level}.\n"
 
     "## Tricks and Tips\n"
     "- You can use the 'unmove' action to undo the last move if you make a mistake such as pushing a box into a deadend.\n"
     "- You can use the 'restart' action to restart the current level if you get stuck.\n"
     "- You might need to move around some boxes or walls to create space for the worker to move.\n"
+    "- If you spend more than 5 steps in one level without any progress, consider to push one box to the opposite direction to make space for the box to be pushed to the dock location.\n"
+    "- Every empty space could be used. If you have a box blocking way to some space, you can push the box to towards the space and then push it back.\n"
+    "- If the worker is between the box and the dock, the worker should move around to make the box between the worker and the dock. During the moving, it is totally OK to push the box around in order to make it between the workder and a dock.\n"
 
     "## Methodology of playing Sokoban\n"
     "- Make a plan of moving boxes to the dock locations.\n"
@@ -188,9 +199,10 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "- Start with the end. Think how the last box will reach the dock location. Then work backward to find the path for the worker.\n"
     "- Before making a move, re-analyze the entire puzzle layout. "
     "- Do not waste too much time thinking. If you are not sure, just make a move. You can always unmove or restart to compose a new plan.\n"
+    "- Always identify critical locations in the board. Critical locations are box or empty items that are in the passages connecting rooms. You should plan moves across the critical locations instead of wasting time in hitting walls.\n"
 
     "## Feedback and Critique\n"
-    "Another expert provides critique and feedback based on your thoughts and moves. It might be helpful to optimize your plan. Please take the feedback into consideratio. The feedback is:"
+    "Another critic provides critique and feedback based on your thoughts and moves. It might be helpful to refine your plan. Please take the feedback into consideration. The feedback is:"
     f"{critic_feedback}.\n\n"
 
     "## Potential Deadlocks to avoid:\n"
@@ -211,7 +223,11 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "The output should be in the following format:\n"
     "<thought>{thought process}</thought><move>{action}</move>\n\n"
 
-    "The thought process should be a detailed and thoughtful plan of steps. Following methodology and tips mentioned before, taking critic's feedback into consideration, try to compose a workable plan by list the path of moving. For example, (1,1)->(1,2)->(2,3) to move box 1 at (1,2). Keep refining your plan.\n"    
+    "The thought process should be a detailed and thoughtful plan of steps. It should:\n"
+    "- identify the locations of the worker, boxes, and docks, and walls first. This is to have an overview of the board\n"
+    "- identfy passages in the board and critical empty locations between rooms.\n"
+    "- Keep refining your plan. Taking the Critic's feedback into consideration, but don't fully trust his idea. You own your plan.\n"
+    "- Following methodology and tricks and tips mentioned before to compose a plan by list the path to move boxes to docks. For example, (1,1)->(1,2)->(2,3) to move box 1 at (1,2) to doc at (2, 3). Always try to get a complete path before execution.\n"    
 
     "The action should be one of the following"
     "- 'up' decrements the row_index of the worker in board.\n"
@@ -225,7 +241,61 @@ def sokoban_worker(system_prompt, api_provider, model_name,
     "Actions up/down/left/right can only push boxes if the worker is positioned next to the box and the opposite side of the box is empty.\n"
 
     "Example output 1 (single move):"
-    "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move:>\n\n"
+    "```\n"
+    "<thought>"
+    # "The board layout is like this:\n"
+    # "ID | Item Type    | Position\n"
+    # "1  | Wall         | (0, 0)\n"
+    # "2  | Wall         | (0, 1)\n"
+    # "3  | Wall         | (0, 2)\n"
+    # "4  | Wall         | (0, 3)\n"
+    # "5  | Wall         | (1, 0)\n"
+    # "6  | Dock         | (1, 1)\n"
+    # "7  | Empty        | (1, 2)\n"
+    # "8  | Wall         | (1, 3)\n"
+    # "9  | Wall         | (2, 0)\n"
+    # "10 | Worker       | (2, 1)\n"
+    # "11 | Empty        | (2, 2)\n"
+    # "12 | Wall         | (2, 3)\n"
+    # "13 | Wall         | (3, 0)\n"
+    # "14 | Box          | (3, 1)\n"
+    # "15 | Wall         | (3, 2)\n"
+    # "16 | Wall         | (3, 3)\n"
+    # "17 | Wall         | (4, 0)\n"
+    # "18 | Empty        | (4, 1)\n"
+    # "19 | Empty        | (4, 2)\n"
+    # "20 | Wall         | (4, 3)\n"
+    # "21 | Wall         | (5, 0)\n"
+    # "22 | Empty        | (5, 1)\n"
+    # "23 | Empty        | (5, 2)\n"
+    # "24 | Wall         | (5, 3)\n"
+    # "25 | Wall         | (6, 0)\n"
+    # "26 | Empty        | (6, 1)\n"
+    # "27 | Empty        | (6, 2)\n"
+    # "28 | Wall         | (6, 3)\n"
+    # "29 | Wall         | (7, 0)\n"
+    # "30 | Empty        | (7, 1)\n"
+    # "31 | Empty        | (7, 2)\n"
+    # "32 | Wall         | (7, 3)\n"
+    # "33 | Wall         | (8, 0)\n"
+    # "34 | Wall         | (8, 1)\n"
+    # "35 | Wall         | (8, 2)\n"
+    # "36 | Wall         | (8, 3)\n"
+    # "\n"
+    "The worker is at (2, 1) and the box is at (3, 1). The dock is at (1, 1). The location (3, 1) is in critical path since it is the passge connecting upper room and downer room.\n"
+    "To push the box at (3,1) to dock at (1, 1), the worker has to move to the opposite side of the box. It looks there is no way to move around the box in the narrow space. So, I will push the box to a wider space. Then it is possible to keep the box between the dock and the worker.\n"
+    "Plans:\n"
+    "Phase 1: Push the box to the right to wider space.\n"
+    "Phase 2: Move the worker to make the box between the dock and the worker.\n"
+    "Phase 3: Push the box to the dock.\n"
+    "Details of Plans:\n"
+    "The Phase 1 moves are: (2, 1) -> (3, 1) -> (4, 1). After these moves, the box is supposed to be pushed at (5, 1) after these moves. Both the worker and the box are in a wider space.\n"    
+    "The Phase 2 moves are: (4, 1) -> (4, 2) -> (5, 2) -> (6, 2) -> (6, 1). After these moves, the box is still at (5, 1) which is between the worker and the dock.\n"
+    "The Phase 3 moves are: (6, 1) -> (5, 1) -> (4, 1) -> (3, 1) -> (2, 1). These moves will push the box to the dock.\n"
+    "So, the next step is down to (3, 1).</thought><move>down</move>\n"
+    "```\n"
+
+    
     # "Example output 2 (multiple moves):"
     # "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move>"
     # "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 4) -> (3, 4)</thought><move>up</move>\n\n"
@@ -281,14 +351,16 @@ def sokoban_critic(moves_thoughts=None, last_action=None, system_prompt=None, ap
     game_state = load_game_state()
     if system_prompt is None:
         system_prompt = (
-            "You are an expert Sokoban critic. Your job is to evaluate the quality, safety, and optimality of a sequence of moves and plans for Sokoban, following all Sokoban rules and best practices. "
+            "You are an expert Sokoban critic. Your job is to evaluate the quality, safety, and optimality of a sequence of moves and plans for Sokoban, following all Sokoban rules and best practices."
             "You must point out any mistakes, risks (such as deadlocks), inefficiencies, or missed opportunities for improvement. "
             "Be constructive and specific. If the plan is good, explain why. If not, suggest concrete improvements."
+            "You should be creative and think outside the box. When the plan makes no progress after multiple steps, you can suggest a random push to change the situation."
         )
 
     # Prepare board state as text
     if game_state is not None:
-        board_str = matrix_to_string(game_state)
+        # board_str = matrix_to_string(game_state)
+        board_str, matrix = convert_to_text_table_and_matrix(game_state)
     else:
         board_str = "No board available."
 
@@ -297,42 +369,26 @@ def sokoban_critic(moves_thoughts=None, last_action=None, system_prompt=None, ap
 
     # Sophisticated prompt for LLM
     prompt = (
-        "## Sobokan Game Rules\n"
-        "- The Sokoban board is structured as a list matrix with coordinated positions: (row_index, column_index). Both row_index and column_index start with 0.\n"
-            "- The matrix contains walls, boxes, docks, and the worker."
-            "- In the matrix, the following symbols are used to represent different elements:"
-            "'#': 'Wall',"
-            "'@': 'Worker',"
-            "'$': 'Box',"
-            "'+': 'Worker on Dock',"
-            "'?': 'Dock',"
-            "'*': 'Box on Dock',"
-            "' ': 'Empty'"
-            "- You control a worker who can move in four directions (up decrements row_index, down increments row_index, left decrements column_index, right decrements column_index) in a 2D Sokoban game board. "
-            "- You can push boxes if the worker is positioned next to the box and the opposite side of the box is empty. "
-            "- You can not push the box into a wall or another box. "
-            "- The worker can only push one box at a time. "
-            "- The worker can not pull boxes."
-            "- The worker can not move through walls or boxes. "    
-            "- When a box reaches a dock location, it is marked as a box on dock.\n"
-            "- The goals is to push all boxes onto the dock locations.\n"
-            f"- When all boxes reaches dock location, the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts with action 'cleanup'. You are currently in level {level}.\n"
+        f"{SOKOBAN_GAME_RULES}"
 
-            "The worker's action should be one of the following"
-            "- 'up' decrements the row_index of the worker in board.\n"
-            "- 'down' increments the row_index of the worker in board\n"
-            "- 'left' decrements the column_index of the worker in board\n"
-            "- 'right' increments the column_index of the worker in board\n"
-            "- 'restart' means to restart current level.\n"
-            "- 'unmove' means to undo the last move.\n"
-            "- 'cleanup' means that the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts. You should only do 'cleanup' if the curret layout of the Sokoban board shows that all boxes are on docks.\n"
-            "All action cannot cross wall.\n"
-            "Actions up/down/left/right can only push boxes if the worker is positioned next to the box and the opposite side of the box is empty.\n"
+        f"You are currently in level {level}.\n"
+
+        "The worker's action should be one of the following"
+        "- 'up' decrements the row_index of the worker in board.\n"
+        "- 'down' increments the row_index of the worker in board\n"
+        "- 'left' decrements the column_index of the worker in board\n"
+        "- 'right' increments the column_index of the worker in board\n"
+        "- 'restart' means to restart current level.\n"
+        "- 'unmove' means to undo the last move.\n"
+        "- 'cleanup' means that the current level is completed. Then a new level is started. The board will be refreshed; and you should start over by ignore all previous thoughts. You should only do 'cleanup' if the curret layout of the Sokoban board shows that all boxes are on docks.\n"
+        "All action cannot cross wall.\n"
+        "Worker cannot move diagonally in one step.\n"
+        "Actions up/down/left/right can only push boxes if the worker is positioned next to the box and the opposite side of the box is empty.\n"
     
         "## Sokoban Critic Instructions\n"
         "You are given a Sokoban board state and a sequence of moves and thoughts by another player that lead to the current board state.\n"
         "Your job is to critically evaluate the plan and moves, following these guidelines:\n"
-        "- Evaluate whether given thoughts and plans would end in deadlocks or repeated/looping actions.\n"
+        "- Evaluate whether given thoughts and plans would end in deadlocks or repeated/looping actions or crossing walls.\n"
         "- Identify if any move risks pushing a box into a corner or against a wall where it cannot be recovered.\n"
         "- Assess if the plan is efficient and optimal, or if there are unnecessary steps.\n"
         "- If the last action creates a deadlock, please suggest the other player to unmove.\n"
@@ -342,16 +398,6 @@ def sokoban_critic(moves_thoughts=None, last_action=None, system_prompt=None, ap
         "## Sokoban Board State (as matrix)\n"
         f"{last_action_str}\n\n"
         f"The board state is: {board_str}\n\n"
-        "- The Sokoban board is structured as a list matrix with coordinated positions: (row_index, column_index).\n"
-        "- The matrix contains walls, boxes, docks, and the worker."
-        "- In the matrix, the following symbols are used to represent different elements:"
-            "'#': 'Wall',"
-            "'@': 'Worker',"
-            "'$': 'Box',"
-            "'+': 'Worker on Dock',"
-            "'?': 'Dock',"
-            "'*': 'Box on Dock',"
-            "' ': 'Empty'"
 
         "## Moves and Thoughts\n"
         f"The player's thoughts and moves: {moves_thoughts}\n\n"
