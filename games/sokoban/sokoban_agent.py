@@ -10,7 +10,7 @@ import re
 import pyautogui
 from tools.utils import str2bool
 
-from games.sokoban.workers import sokoban_worker, sokoban_critic
+from games.sokoban.workers import sokoban_player, sokoban_critic
 
 CACHE_DIR = "cache/sokoban"
 
@@ -53,7 +53,7 @@ def pyautogui_move_handler(move):
 
 def main_loop(api_provider, model_name, modality, thinking, num_threads, no_critic= False, move_handler=pyautogui_move_handler):
     # TODO: enlarge this cache size and clear it when level up
-    prev_responses = deque(maxlen=20)
+    prev_responses = deque(maxlen=50)
     level = None
     step_count = 0
     critic_feedback = None
@@ -79,7 +79,16 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
             current_level_path = os.path.join(CACHE_DIR, "current_level.json")
             with open(current_level_path, 'r') as f:
                 level_dict = json.load(f)
-                level = level_dict["level"]
+                new_level = level_dict["level"]
+            
+            if new_level != level:
+                level = new_level
+                # step_count = 0
+                new_level_detected = True
+                prev_responses.clear()
+                print(f"[INFO] New level detected: {level}")
+            else:
+                new_level_detected = False
 
             start_time = time.time()
 
@@ -87,7 +96,8 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
             # ------------------------- critic ------------------------ #
             if (step_count > 0 and no_critic == False):
                 critic_feedback = sokoban_critic(
-                    moves_thoughts = "\n".join(prev_responses),
+                    # moves_thoughts = "\n".join(prev_responses),
+                    moves_thoughts = prev_responses[-1] if prev_responses else "No previous messages.",
                     last_action = final_moves[-1] if final_moves else "unknown action",
                     system_prompt = None,
                     api_provider = api_provider,
@@ -98,9 +108,9 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
                 )
                 print(f"[INFO] Critic feedback on step {step_count}:")
                 print(
-                    "------------ critic feedback -------------\n",
+                    "------------------critic feedback -------------\n\n",
                     f"{critic_feedback}\n"
-                    "-----------------------------------------------\n"
+                    "-----------------------------------------------\n\n"
                 )
                 # critic_feedback = "The strategy should be: 1. push the box down towards the bottom of the map. 2. After moving through the corridor to the bottom space, the worker can push the box up towards the top of the map."
 
@@ -110,7 +120,7 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
                 for _ in range(num_threads):
                     futures.append(
                         executor.submit(
-                            sokoban_worker,
+                            sokoban_player,
                             system_prompt,
                             api_provider,
                             model_name,
@@ -127,7 +137,7 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
                 results = [f.result() for f in futures]
 
             print("all threads finished execution...")
-            print(results)
+            # print(results)
 
             # Find the shortest solution length among all threads
             shortest_length = min(len(mlist) for mlist in results)
@@ -150,7 +160,7 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
                     else:
                         move_candidate_count[move_candidate] = 1
 
-                print(move_candidate_count)
+                # print(move_candidate_count)
 
                 if final_moves:
                     chosen_move = majority_vote_move(move_candidates, final_moves[-1])
@@ -187,8 +197,11 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
             
 
             print("[debug] previous message:")
+            print("########### Player Thoughts & Moves ############### :\n")
             # print("\n".join(prev_responses))
             print(prev_responses[-1] if prev_responses else "No previous messages.")
+            print("###################################################\n\n")
+            
             elapsed_time = time.time() - start_time
             time.sleep(1)
             print(f"[INFO] Move executed in {elapsed_time:.2f} seconds.")

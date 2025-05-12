@@ -34,9 +34,11 @@ def agent():
     main_loop(
         api_provider = 'gemini',
         model_name  = 'gemini-2.5-flash-preview-04-17',
+        # model_name = 'gemini-2.5-pro-exp-03-25',
         num_threads = 1,
         thinking = True,
         modality = 'text-only',
+        no_critic = False,
         move_handler = simulate_move_handler,
     )
 
@@ -44,5 +46,5 @@ def agent():
 threading.Thread(target = agent).start()
 
 # the main game loop
-game_loop(1, 'games/sokoban/simple_levels')
+game_loop(5, 'games/sokoban/simple_levels', max_level=6)
 
