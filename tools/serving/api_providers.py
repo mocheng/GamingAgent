@@ -4,7 +4,8 @@ from openai import OpenAI
 import anthropic
 import google.generativeai as genai
 from google.generativeai import types
-from together import Together
+
+# from together import Together
 
 def anthropic_completion(system_prompt, model_name, base64_image, prompt, thinking=False):
     print(f"anthropic vision-text activated... thinking: {thinking}")
@@ -44,7 +45,7 @@ def anthropic_completion(system_prompt, model_name, base64_image, prompt, thinki
                 for chunk in stream.text_stream:
                     partial_chunks.append(chunk)
     else:
-         
+
         with client.messages.stream(
                 max_tokens=1024,
                 messages=messages,
@@ -55,9 +56,9 @@ def anthropic_completion(system_prompt, model_name, base64_image, prompt, thinki
                 partial_chunks = []
                 for chunk in stream.text_stream:
                     partial_chunks.append(chunk)
-        
+
     generated_code_str = "".join(partial_chunks)
-    
+
     return generated_code_str
 
 def anthropic_text_completion(system_prompt, model_name, prompt, thinking=False):
@@ -88,7 +89,7 @@ def anthropic_text_completion(system_prompt, model_name, prompt, thinking=False)
                 partial_chunks = []
                 for chunk in stream.text_stream:
                     partial_chunks.append(chunk)
-    else:    
+    else:
         with client.messages.stream(
                 max_tokens=1024,
                 messages=messages,
@@ -99,16 +100,16 @@ def anthropic_text_completion(system_prompt, model_name, prompt, thinking=False)
                 partial_chunks = []
                 for chunk in stream.text_stream:
                     partial_chunks.append(chunk)
-        
+
     generated_str = "".join(partial_chunks)
-    
+
     return generated_str
 
 
 def anthropic_multiimage_completion(system_prompt, model_name, prompt, list_content, list_image_base64):
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    
-    content_blocks = [] 
+
+    content_blocks = []
     for text_item, base64_image in zip(list_content, list_image_base64):
         content_blocks.append(
             {
@@ -126,7 +127,7 @@ def anthropic_multiimage_completion(system_prompt, model_name, prompt, list_cont
                 },
             }
         )
-    
+
     content_blocks.append(
         {
             "type": "text",
@@ -154,9 +155,9 @@ def anthropic_multiimage_completion(system_prompt, model_name, prompt, list_cont
             for chunk in stream.text_stream:
                 print(chunk)
                 partial_chunks.append(chunk)
-        
+
     generated_str = "".join(partial_chunks)
-    
+
     return generated_str
 
 import httpx
@@ -242,12 +243,12 @@ def openai_text_completion(system_prompt, model_name, prompt):
     )
 
     generated_str = response.choices[0].message.content
-     
+
     return generated_str
 
 def openai_text_reasoning_completion(system_prompt, model_name, prompt, temperature=0):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    
+
     messages = [
         {
             "role": "user",
@@ -262,7 +263,7 @@ def openai_text_reasoning_completion(system_prompt, model_name, prompt, temperat
 
     # Determine correct token parameter
     token_param = "max_completion_tokens" if "o3-mini" in model_name else "max_tokens"
-    
+
     # Prepare request parameters dynamically
     request_params = {
         "model": model_name,
@@ -270,7 +271,7 @@ def openai_text_reasoning_completion(system_prompt, model_name, prompt, temperat
         token_param: 100000,
         "reasoning_effort": "medium"
     }
-    
+
     # Only add 'temperature' if the model supports it
     if "o3-mini" not in model_name:  # Assuming o3-mini doesn't support 'temperature'
         request_params["temperature"] = temperature
@@ -278,11 +279,11 @@ def openai_text_reasoning_completion(system_prompt, model_name, prompt, temperat
     response = client.chat.completions.create(**request_params)
 
     generated_str = response.choices[0].message.content
-     
+
     return generated_str
 
 def deepseek_text_reasoning_completion(system_prompt, model_name, prompt):
-     
+
     client = OpenAI(
         api_key=os.getenv("DEEPSEEK_API_KEY"),
         base_url="https://api.deepseek.com",
@@ -303,24 +304,24 @@ def deepseek_text_reasoning_completion(system_prompt, model_name, prompt):
         messages = messages,
         stream=True,
         max_tokens=8000)
-    
+
     for chunk in response:
         if chunk.choices[0].delta.reasoning_content and chunk.choices[0].delta.reasoning_content:
             reasoning_content += chunk.choices[0].delta.reasoning_content
         elif hasattr(chunk.choices[0].delta, "content") and chunk.choices[0].delta.content:
             content += chunk.choices[0].delta.content
-    
+
     # generated_str = response.choices[0].message.content
     print(content)
     return content
-    
+
 
 
 def openai_multiimage_completion(system_prompt, model_name, prompt, list_content, list_image_base64):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     content_blocks = []
-    
+
     joined_steps = "\n\n".join(list_content)
     content_blocks.append(
         {
@@ -345,7 +346,7 @@ def openai_multiimage_completion(system_prompt, model_name, prompt, list_content
             "content": content_blocks,
         }
     ]
-    
+
     response = client.chat.completions.create(
         model=model_name,
         messages=messages,
@@ -354,7 +355,7 @@ def openai_multiimage_completion(system_prompt, model_name, prompt, list_content
     )
 
     generated_str = response.choices[0].message.content
-     
+
     return generated_str
 
 
@@ -365,7 +366,7 @@ def gemini_text_completion(system_prompt, model_name, prompt):
     messages = [
         prompt,
     ]
-            
+
     try:
         response = model.generate_content(
             messages
@@ -380,12 +381,12 @@ def gemini_text_completion(system_prompt, model_name, prompt):
         if not response or not hasattr(response, "candidates") or not response.candidates:
             print("Warning: Empty or invalid response")
             return ""
-        
+
         return response.text  # Access response.text safely
 
     except Exception as e:
         print(f"Error: {e}")
-        return "" 
+        return ""
 
 def anthropic_text_completion(system_prompt, model_name, prompt, thinking=False):
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -415,7 +416,7 @@ def anthropic_text_completion(system_prompt, model_name, prompt, thinking=False)
                 partial_chunks = []
                 for chunk in stream.text_stream:
                     partial_chunks.append(chunk)
-    else:    
+    else:
         with client.messages.stream(
                 max_tokens=1024,
                 messages=messages,
@@ -426,9 +427,9 @@ def anthropic_text_completion(system_prompt, model_name, prompt, thinking=False)
                 partial_chunks = []
                 for chunk in stream.text_stream:
                     partial_chunks.append(chunk)
-        
+
     generated_str = "".join(partial_chunks)
-    
+
     return generated_str
 
 def gemini_text_completion(system_prompt, model_name, prompt):
@@ -438,7 +439,7 @@ def gemini_text_completion(system_prompt, model_name, prompt):
     messages = [
         prompt,
     ]
-            
+
     try:
         response = model.generate_content(
             messages
@@ -453,12 +454,12 @@ def gemini_text_completion(system_prompt, model_name, prompt):
         if not response or not hasattr(response, "candidates") or not response.candidates:
             print("Warning: Empty or invalid response")
             return ""
-        
+
         return response.text  # Access response.text safely
 
     except Exception as e:
         print(f"Error: {e}")
-        return "" 
+        return ""
 
 def gemini_completion(system_prompt, model_name, base64_image, prompt):
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -471,7 +472,7 @@ def gemini_completion(system_prompt, model_name, base64_image, prompt):
         },
         prompt,
     ]
-            
+
     try:
         response = model.generate_content(
             messages
@@ -486,12 +487,12 @@ def gemini_completion(system_prompt, model_name, base64_image, prompt):
         if not response or not hasattr(response, "candidates") or not response.candidates:
             print("Warning: Empty or invalid response")
             return ""
-        
+
         return response.text  # Access response.text safely
 
     except Exception as e:
         print(f"Error: {e}")
-        return "" 
+        return ""
 
 def gemini_multiimage_completion(system_prompt, model_name, prompt, list_content, list_image_base64):
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -505,14 +506,14 @@ def gemini_multiimage_completion(system_prompt, model_name, prompt, list_content
                 "data": base64_image,
             },
         )
-    
+
     joined_steps = "\n\n".join(list_content)
     content_blocks.append(
         joined_steps
     )
 
     messages = content_blocks
-            
+
     try:
         response = model.generate_content(
             messages,
@@ -526,7 +527,7 @@ def gemini_multiimage_completion(system_prompt, model_name, prompt, list_content
 
 
 def deepseek_text_reasoning_completion(system_prompt, model_name, prompt):
-     
+
     client = OpenAI(
         api_key=os.getenv("DEEPSEEK_API_KEY"),
         base_url="https://api.deepseek.com",
@@ -547,17 +548,17 @@ def deepseek_text_reasoning_completion(system_prompt, model_name, prompt):
         messages = messages,
         stream=True,
         max_tokens=8000)
-    
+
     for chunk in response:
         if chunk.choices[0].delta.reasoning_content and chunk.choices[0].delta.reasoning_content:
             reasoning_content += chunk.choices[0].delta.reasoning_content
         elif hasattr(chunk.choices[0].delta, "content") and chunk.choices[0].delta.content:
             content += chunk.choices[0].delta.content
-    
+
     # generated_str = response.choices[0].message.content
     return content
 
-
+'''
 def together_ai_completion(system_prompt, model_name, prompt, base64_image=None, temperature=0):
     client = Together(api_key=os.getenv("TOGETHER_API_KEY"))
     if base64_image is not None:
@@ -598,5 +599,6 @@ def together_ai_completion(system_prompt, model_name, prompt, base64_image=None,
         )
 
     generated_str = response.choices[0].message.content
-     
+
     return generated_str
+'''
