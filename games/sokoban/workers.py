@@ -156,6 +156,80 @@ METHODOLOGY_AND_TIPS = '''
 
 #"- If the board has two rooms connected by a narrow passage, you should try a plan to push one box to the opposite direction to make space for the box to be pushed back to the dock location."
 
+
+def sokoban_planner(system_prompt, api_provider, model_name, thinking=True, modality="text-only", level=1):
+    '''
+    A planner agent to generate a list of mutually exclusive and collectively inclusive strategies for the Sokoban game.
+    Each strategy will have an ID and will be saved to a file for later retrieval.
+    '''
+
+    if system_prompt is None:
+        system_prompt = (
+            "You are an expert Sokoban planner. Your job is to generate a list of mutually exclusive and collectively inclusive strategies for the Sokoban game."
+        )
+
+    # Load the current game state
+    game_state = load_game_state()
+    if game_state is not None:
+        board_str, matrix = convert_to_text_table_and_matrix(game_state)
+    else:
+        board_str = "No board available."
+
+    prompt = (
+        f"{SOKOBAN_GAME_RULES}"
+        f"You are currently in level {level}.\n"
+        f"{METHODOLOGY_AND_TIPS}"
+
+        "\n## Planning Instructions\n"
+        "Analyze the current Sokoban board and compose multiple strategies to move boxes to the dock locations.\n"
+        "The output should be a list of no less than 3 strategies.\n"
+        "The strategies should be general guidelines to solve current level.\n"
+        "The strategies should be mutually exclusive and collectively inclusive.\n"
+        "Each strategy should not have speicific moves. Instead, each strategy should have an instructional plan in phases to complete the whole level. \n"
+        "Each strategy should have a unique ID.\n"
+
+        "# Board State\n"
+        "\nHere is the current layout of the Sokoban board:\n"
+        f"{board_str}\n\n"
+
+        "## Output Format\n"
+        "Return only the JSON list of strategies as shown above. The response should start with string '[\n'."
+        "\nExample Output (JSON):\n"
+        "[\n"
+        "  {\"id\": 1, \"strategy\": \"Push box 1 to dock 2, then box 2 to dock 1.\"},\n"
+        "  {\"id\": 2, \"strategy\": \"Push box 2 to the right, then box 1 to dock 1, then box 2 to dock 2.\"}\n"
+        "]\n\n"
+    )
+
+    # Call the LLM to get strategies
+    response = call_llm(api_provider, system_prompt, model_name, prompt, thinking, None, modality)
+
+    # Try to parse the response as JSON
+    try:
+        strategies = json.loads(response)
+
+        print(strategies)
+
+        # Ensure each strategy has a unique string ID
+        for i, strat in enumerate(strategies):
+            if 'id' not in strat:
+                strat['id'] = str(i+1)
+            else:
+                strat['id'] = str(strat['id'])
+    except Exception as e:
+        print(f"[ERROR] Failed to parse strategies: {e}\nResponse: {response}")
+        strategies = []
+
+    # Save strategies to file
+    strategies_file = os.path.join(CACHE_DIR, "sokoban_strategies.json")
+    try:
+        with open(strategies_file, "w") as f:
+            json.dump(strategies, f, indent=2)
+    except Exception as e:
+        print(f"[ERROR] Failed to save strategies: {e}")
+
+    return strategies
+
 def sokoban_player(system_prompt, api_provider, model_name, 
     prev_response="", 
     thinking=True, 
@@ -217,6 +291,9 @@ def sokoban_player(system_prompt, api_provider, model_name,
 
     f"Here is your previous response: {prev_response}. Please evaluate your plan and thought about whether we should correct or adjust.\n"
 
+    "## Strategy\n"
+    "Utilize the main vertical corridor as the primary path for the box. First, push the box downwards into the corridor, potentially sending it into the lower section. Then, maneuver the worker through the larger open area to reposition below the box in the corridor. Finally, push the box upwards along the corridor, step by step, until it reaches the dock.\n"
+
     "## Sokoban Game board"
     "Here is the current layout of the Sokoban board:\n"
     f"{table}\n\n"
@@ -224,16 +301,16 @@ def sokoban_player(system_prompt, api_provider, model_name,
     # f"{matrix}\n\n"
 
     "## Output Format:\n"
-
     "The output should be on line of text, each line should contain a thought process and a move.\n"
     "The output should be in the following format:\n"
     "<thought>{thought process}</thought><move>{action}</move>\n\n"
 
-    "The thought process should be a detailed and thoughtful plan of steps. It should:\n"
+    "The thought process should be a detailed and thoughtful plan of steps following the Strategy above. It should:\n"
     "- identify the locations of the worker, boxes, and docks, and walls first. This is to have an overview of the board\n"
     "- identfy passages in the board and critical empty locations between rooms.\n"
     "- Keep refining your plan. Taking the Critic's feedback into consideration, but don't fully trust his idea. You own your plan.\n"
-    "- Following methodology and tips mentioned before to compose a plan by list the path to move boxes to docks. For example, (1,1)->(1,2)->(2,3) to move box 1 at (1,2) to doc at (2, 3). Always try to get a complete path before execution.\n"    
+    "- Following methodology and tips mentioned before to compose a plan by list the path to move boxes to docks. For example, (1,1)->(1,2)->(2,3) to move box 1 at (1,2) to doc at (2, 3). Always try to get a complete path before execution.\n" 
+    "- Stick to the strategy.\n"   
 
     "The action should be one of the following"
     "- 'up' decrements the row_index of the worker in board.\n"
@@ -300,7 +377,6 @@ def sokoban_player(system_prompt, api_provider, model_name,
     "The Phase 3 moves are: (6, 1) -> (5, 1) -> (4, 1) -> (3, 1) -> (2, 1). These moves will push the box to the dock.\n"
     "So, the next step is down to (3, 1).</thought><move>down</move>\n"
     "```\n"
-
     
     # "Example output 2 (multiple moves):"
     # "<thought>Positioning the worker to access other boxes and docks for future moves. The path of the worker will be (2, 3) -> (2, 4) -> (3, 4).</thought><move>right</move>"
@@ -381,10 +457,16 @@ def sokoban_critic(moves_thoughts=None, last_action=None, system_prompt=None, ap
 
         f"You are currently in level {level}.\n"
     
+        "## Strategy\n"
+        "Utilize the main vertical corridor as the primary path for the box. First, push the box downwards into the corridor, potentially sending it into the lower section. Then, maneuver the worker through the larger open area to reposition below the box in the corridor. Finally, push the box upwards along the corridor, step by step, until it reaches the dock.\n"
+
+
         "## Sokoban Critic Instructions\n"
         "You are given a Sokoban board state and a sequence of moves and thoughts by another player that lead to the current board state.\n"
+        "You are also given a Strategy that guides the player."
         "Your job is to critically evaluate the plan and moves, following these guidelines:\n"
-        "- Evaluate whether given thoughts and plans would end in deadlocks or repeated/looping actions or crossing walls.\n"
+        "- Evaluate whether the moves are safe and follow the Strategy. Ensure the player's plan stick to the Strategy.\n"
+        # "- Evaluate whether given thoughts and plans would end in deadlocks or repeated/looping actions or crossing walls.\n"
         "- Identify if any move risks pushing a box into a corner or against a wall where it cannot be recovered.\n"
         "- Assess if the plan is efficient and optimal, or if there are unnecessary steps.\n"
         "- If the last action creates a deadlock, please suggest the other player to unmove.\n"

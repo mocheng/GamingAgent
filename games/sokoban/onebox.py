@@ -46,5 +46,5 @@ def agent():
 threading.Thread(target = agent).start()
 
 # the main game loop
-game_loop(5, 'games/sokoban/simple_levels', max_level=6)
+game_loop(1, 'games/sokoban/simple_levels', max_level=6)
 

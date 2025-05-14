@@ -10,7 +10,11 @@ import re
 import pyautogui
 from tools.utils import str2bool
 
-from games.sokoban.workers import sokoban_player, sokoban_critic
+from games.sokoban.workers import (
+    sokoban_planner, 
+    sokoban_player, 
+    sokoban_critic
+)
 
 CACHE_DIR = "cache/sokoban"
 
@@ -87,10 +91,21 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
                 new_level_detected = True
                 prev_responses.clear()
                 print(f"[INFO] New level detected: {level}")
+
+                # sokoban_planner(
+                #     system_prompt,
+                #     api_provider,
+                #     model_name,
+                #     thinking=str2bool(thinking),
+                #     modality=modality,
+                #     level=level
+                # )
             else:
                 new_level_detected = False
 
             start_time = time.time()
+
+            
 
             print(f"level={level}, step={step_count}\n")
             # ------------------------- critic ------------------------ #
@@ -201,7 +216,7 @@ def main_loop(api_provider, model_name, modality, thinking, num_threads, no_crit
             # print("\n".join(prev_responses))
             print(prev_responses[-1] if prev_responses else "No previous messages.")
             print("###################################################\n\n")
-            
+
             elapsed_time = time.time() - start_time
             time.sleep(1)
             print(f"[INFO] Move executed in {elapsed_time:.2f} seconds.")
